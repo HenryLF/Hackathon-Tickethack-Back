@@ -7,39 +7,49 @@ let bookings = [];
 
 
 
-// Route pour ajouter un trajet
+// Route pour rechercher un trajet
 router.post("/", (req, res) => {
-    const { departure, arrival, date } = req.body;
+    const { departure, arrival, date } = req.body; // On récupère les données depuis req.body
+    // Vérification des champs requis
     if (!departure || !arrival || !date) {
         return res.status(400).json({ message: "Tous les champs sont requis (départ, arrivée, date)" });
     }
-    // Vérifier si un trajet existe déjà avec le même départ, arrivée et date
-    const existingTrips = data.filter(trip =>
-        trip.departure.toLowerCase() === departure.toLowerCase() &&
-        trip.arrival.toLowerCase() === arrival.toLowerCase() &&
-        trip.date === date
-    );
-    // Si un trajet avec la même date existe, renvoyer une erreur
-    if (existingTrips.length > 0) {
-        return res.status(409).json({ message: "Un trajet avec la même date existe déjà" });
+    // Normalisation de la date entrée au format YYYY-MM-DD
+    const formattedDate = new Date(date).toISOString().split('T')[0];
+    // Recherche des trajets correspondant aux critères
+    const matchingTrips = data
+        .filter(trip => {
+            // Normalisation des valeurs de départ et d'arrivée en minuscules pour la comparaison
+            const tripDate = new Date(trip.date.$date || trip.date).toISOString().split('T')[0];
+            return trip.departure.toLowerCase() === departure.toLowerCase() &&
+                trip.arrival.toLowerCase() === arrival.toLowerCase() &&
+                tripDate === formattedDate; // Comparaison de la date formatée
+        })
+        .map(trip => ({
+            ...trip,
+            id: trip.id || `trip-${Date.now()}-${Math.floor(Math.random() * 1000)}` // Génère un ID unique si absent
+        }));
+    // Vérification de la présence de trajets correspondants
+    if (matchingTrips.length > 0) {
+        return res.status(200).json({ message: "Trajets trouvés", trips: matchingTrips });
     }
-    // Ajouter le nouveau trajet uniquement si aucun ne correspond à la même date
-    const newTrajet = { id: Date.now(), departure, arrival, date };
-    data.push(newTrajet); // Simule l'ajout dans une base de données (tableau en mémoire)
-    res.status(201).json({ message: "Trajet ajouté avec succès", trajet: newTrajet });
+    return res.status(404).json({ message: "Aucun trajet trouvé pour ces critères" });
 });
+
 
 
 
 // Route pour ajouter un trajet au panier
 router.post("/cart", (req, res) => {
-    const { tripId } = req.body;
+    const { id } = req.body;
+    console.log(req.body);
     // Vérifier si un tripId a été fourni
-    if (!tripId) {
+    if (!req.body.id) {
+    
         return res.status(400).json({ message: "L'ID du trajet est requis" });
     }
     // Vérifier si le trajet existe dans la BDD
-    const trip = data.find(t => t.id === tripId);
+    const trip = data.find(t => t.id === req.body.id);
     if (!trip) {
         return res.status(404).json({ message: "Trajet non trouvé" });
     }
@@ -76,9 +86,9 @@ router.delete("/cart", (req, res) => {
 
 
 // Route pour effectuer un achat et vider le panier
-router.post("/purchase", (req, res) => {
+router.post("/bookings", (req, res) => {
     console.log("Panier avant l'achat:", cart);
-
+ 
     if (cart.length === 0) {
         return res.status(400).json({ message: "Le panier est vide. Ajoutez des trajets avant de passer à l'achat." });
     }
