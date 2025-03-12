@@ -23,4 +23,5 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/trips', tripRouter);
 
+
 module.exports = app;
