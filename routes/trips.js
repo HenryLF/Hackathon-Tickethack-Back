@@ -9,14 +9,13 @@ let bookingArray = new Array();
 
 // Search MongoDB for a trip
 router.post("/", async (req, res) => {
-  const { departure, arrival, date } = req.body;
+  let { departure, arrival, date } = req.body;
   if (!departure || !arrival || !date) {
     return res.json({
       result: false,
       message: "Invalid query (missing fields).",
     });
   }
-
   let searchResult = await Trips.aggregate([
     {
       $match: {
@@ -25,6 +24,12 @@ router.post("/", async (req, res) => {
       },
     },
   ]);
+  date = new Date(date);
+  searchResult = searchResult.filter((trip) => {
+    return trip.date.getFullYear() == date.getFullYear() &&
+      trip.date.getMonth() == date.getMonth() &&
+      trip.date.getDate() == date.getDate();
+  });
   searchResult.length > 0
     ? res.json({ result: true, data: searchResult })
     : res.json({ result: true, data: [], message: "Not Found" });
