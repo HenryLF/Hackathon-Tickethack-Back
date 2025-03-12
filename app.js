@@ -8,6 +8,7 @@ require("./models/connection")
 
 
 var tripRouter = require("./routes/trips")
+var usersRouter = require("./routes/users")
 
 
 var app = express();
@@ -22,6 +23,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/trips', tripRouter);
+app.use('/users', usersRouter);
 
 
 module.exports = app;
