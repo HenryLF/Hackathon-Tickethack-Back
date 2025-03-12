@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const Trips = require("../models/trips");
-const mongoose = require("mongoose");
+const Users = require("../models/users");
 
 let cartArray = new Array();
 let bookingArray = new Array();
@@ -16,72 +16,114 @@ router.post("/", async (req, res) => {
       message: "Invalid query (missing fields).",
     });
   }
+
+  let startOfDay = new Date(date);
+  startOfDay.setUTCHours(0, 0, 0, 0);
+  let endOfDay = new Date(date);
+  endOfDay.setUTCHours(23, 59, 59, 999);
   let searchResult = await Trips.aggregate([
     {
       $match: {
-        departure: departure,
-        arrival: arrival,
+        departure: { $regex: new RegExp(departure, "i") },
+        arrival: { $regex: new RegExp(arrival, "i") },
+        date: { $gte: startOfDay, $lte: endOfDay },
       },
     },
   ]);
-  date = new Date(date);
-  searchResult = searchResult.filter((trip) => {
-    return trip.date.getFullYear() == date.getFullYear() &&
-      trip.date.getMonth() == date.getMonth() &&
-      trip.date.getDate() == date.getDate();
-  });
+
   searchResult.length > 0
     ? res.json({ result: true, data: searchResult })
     : res.json({ result: true, data: [], message: "Not Found" });
 });
 
 // Route pour ajouter un trajet au panier
-router.post("/cart", async (req, res) => {
+router.post("/cart/:userID", async (req, res) => {
   let newTrip = await Trips.findOne({ _id: req.body.id });
-  newTrip && cartArray.push(newTrip);
+  !newTrip &&
+    res.json({
+      result: false,
+      message: "No such trip.",
+      data: {},
+    });
+
+  await Users.findByIdAndUpdate(req.params.userID, {
+    $push: { cart: newTrip._id },
+  });
+
   res.json({
-    result: Boolean(newTrip),
-    message: newTrip ? "Trip successfully add to cart." : "No such trip.",
-    data: cartArray,
+    result: true,
+    message: "Trip successfully add to cart.",
+    data: newTrip,
   });
 });
 
 // Route pour voir le panier
-router.get("/cart", (req, res) => {
-  res.json({ result: true, data: cartArray });
+router.get("/cart/:userID", async (req, res) => {
+  let userProfile = await Users.findById(req.params.userID);
+  !userProfile &&
+    res.json({
+      result: false,
+      message: "Unknown user",
+    });
+  await Users.populate(userProfile, "cart");
+  res.json({ result: true, data: userProfile.cart });
 });
 
 // Route pour supprimer un trajet du panier
-router.delete("/cart/:id", (req, res) => {
-  console.log(req.params.id);
-  cartArray = cartArray.filter((trip) => trip._id != req.params.id);
+router.delete("/cart/:userID/:tripID", async (req, res) => {
+  let userProfile = await Users.findById(req.params.userID);
+  !userProfile &&
+    res.json({
+      result: false,
+      message: "Unknown user",
+    });
+
+  await Users.findByIdAndUpdate(req.params.userID, {
+    $pull: { cart: req.params.tripID },
+  });
+
   res.status(200).json({
     result: true,
     message: "Trip deleted from cart.",
-    cart: cartArray,
+    data: req.params.tripID,
   });
 });
 
 // Route pour effectuer un achat et vider le panier
-router.post("/purchase", (req, res) => {
-  if (cartArray.length < 1) {
+router.post("/purchase/:userID", async (req, res) => {
+  let userProfile = await Users.findById(req.params.userID);
+  !userProfile &&
+    res.json({
+      result: false,
+      message: "Unknown user",
+    });
+
+  userProfile.cart.length < 1 &&
     res.json({
       result: false,
       message: "Empty cart, please search and add trips.",
-      data: [],
     });
-  }
-  bookingArray = cartArray;
-  cartArray = [];
+
+  await Users.findByIdAndUpdate(req.params.userID, [
+    { $set: { bookings: { $concatArrays: ["$bookings", "$cart"] } } },
+    { $set: { cart: [] } },
+  ]);
+
   res.json({
     result: true,
     message: "Thank you for your purchase.",
-    data: bookingArray,
   });
 });
 
-router.get("/bookings", (req, res) => {
-  res.json({ result: true, data: bookingArray });
+router.get("/bookings/:userID", async (req, res) => {
+  let userProfile = await Users.findById(req.params.userID);
+  !userProfile &&
+    res.json({
+      result: false,
+      message: "Unknown user",
+    });
+  await Users.populate(userProfile, "bookings");
+  res.json({ result: true, data: userProfile.bookings });
 });
 
 module.exports = router;
