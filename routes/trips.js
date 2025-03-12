@@ -1,118 +1,82 @@
 const express = require("express");
 const router = express.Router();
-const data = require("../tripsData"); // Import des trajets
 
 const Trips = require("../models/trips");
 const mongoose = require("mongoose");
 
-let cart = [];
-let bookings = [];
+let cartArray = new Array();
+let bookingArray = new Array();
 
-// Route pour ajouter un trajet
+// Search MongoDB for a trip
 router.post("/", async (req, res) => {
   const { departure, arrival, date } = req.body;
   if (!departure || !arrival || !date) {
-    return res
-      .status(400)
-      .json({ message: "Tous les champs sont requis (départ, arrivée, date)" });
+    return res.json({
+      result: false,
+      message: "Invalid query (missing fields).",
+    });
   }
+
   let searchResult = await Trips.aggregate([
     {
       $match: {
-        departure: "Paris",
-        arrival: "Marseille",
+        departure: departure,
+        arrival: arrival,
       },
     },
-  ])
-  res
-    .status(201)
-    .json({ result: true, data: searchResult });
+  ]);
+  searchResult.length > 0
+    ? res.json({ result: true, data: searchResult })
+    : res.json({ result: true, data: [], message: "Not Found" });
 });
 
 // Route pour ajouter un trajet au panier
-router.post("/cart", (req, res) => {
-  console.log(req);
+router.post("/cart", async (req, res) => {
+  let newTrip = await Trips.findOne({ _id: req.body.id });
+  newTrip && cartArray.push(newTrip);
   res.json({
-    result: true,
-    data: [],
+    result: Boolean(newTrip),
+    message: newTrip ? "Trip successfully add to cart." : "No such trip.",
+    data: cartArray,
   });
 });
+
 // Route pour voir le panier
 router.get("/cart", (req, res) => {
-  console.log(req.body);
-  res.status(200).json({ message: "Panier", cart });
+  res.json({ result: true, data: cartArray });
 });
 
 // Route pour supprimer un trajet du panier
-router.delete("/cart", (req, res) => {
-  const { tripId } = req.body;
-  // Vérifier si un tripId est fourni
-  if (!tripId) {
-    return res.status(400).json({ message: "L'ID du trajet est requis" });
-  }
-  // Trouver l'index du trajet dans le panier
-  const tripIndex = cart.findIndex((t) => t.id === tripId);
-  // Si le trajet n'est pas trouvé dans le panier
-  if (tripIndex === -1) {
-    return res
-      .status(404)
-      .json({ message: "Trajet non trouvé dans le panier" });
-  }
-  // Retirer le trajet du panier
-  cart.splice(tripIndex, 1);
-  res.status(200).json({ message: "Trajet supprimé du panier", cart });
+router.delete("/cart/:id", (req, res) => {
+  console.log(req.params.id);
+  cartArray = cartArray.filter((trip) => trip._id != req.params.id);
+  res.status(200).json({
+    result: true,
+    message: "Trip deleted from cart.",
+    cart: cartArray,
+  });
 });
 
 // Route pour effectuer un achat et vider le panier
 router.post("/purchase", (req, res) => {
-  console.log("Panier avant l'achat:", cart);
-
-  if (cart.length === 0) {
-    return res.status(400).json({
-      message:
-        "Le panier est vide. Ajoutez des trajets avant de passer à l'achat.",
+  if (cartArray.length < 1) {
+    res.json({
+      result: false,
+      message: "Empty cart, please search and add trips.",
+      data: [],
     });
   }
-
-  // Cloner les trajets du panier dans les réservations
-  const bookingsForThisPurchase = [...cart];
-
-  // Ajouter ces trajets dans les réservations
-  bookings.push(...bookingsForThisPurchase);
-
-  // Vider le panier après l'achat
-  cart = [];
-
-  res.status(200).json({
-    message: "Achat effectué avec succès. Les trajets ont été réservés.",
-    bookings: bookingsForThisPurchase,
+  bookingArray = cartArray;
+  cartArray = [];
+  res.json({
+    result: true,
+    message: "Thank you for your purchase.",
+    data: bookingArray,
   });
 });
 
-// Route pour voir les réservations et affiche tous les trajets payés ainsi que
-// le temps d’attente entre l’heure actuelle et celle du départ du trajet.
 router.get("/bookings", (req, res) => {
-  const now = new Date();
-
-  const bookingsWithWaitTime = bookings.map((trip) => {
-    const departureTime = new Date(trip.date.$date || trip.date); // Gérer le format MongoDB et normal
-    const timeDiff = departureTime - now; // Différence en millisecondes
-
-    let waitTime;
-    if (timeDiff > 0) {
-      const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-      waitTime = `${hours}h ${minutes}min`;
-    } else {
-      waitTime = "Départ passé";
-    }
-
-    return { ...trip, waitTime };
-  });
-
-  res
-    .status(200)
-    .json({ message: "Réservations", bookings: bookingsWithWaitTime });
+  res.json({ result: true, data: bookingArray });
 });
 
 module.exports = router;
