@@ -4,8 +4,6 @@ const router = express.Router();
 const Trips = require("../models/trips");
 const Users = require("../models/users");
 
-let cartArray = new Array();
-let bookingArray = new Array();
 
 // Search MongoDB for a trip
 router.post("/", async (req, res) => {
@@ -45,7 +43,6 @@ router.post("/cart/:userID", async (req, res) => {
       message: "No such trip.",
       data: {},
     });
-
   await Users.findByIdAndUpdate(req.params.userID, {
     $push: { cart: newTrip._id },
   });
