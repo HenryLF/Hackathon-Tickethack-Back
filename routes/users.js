@@ -4,8 +4,9 @@ var router = express.Router();
 var Users = require("../models/users");
 
 /* GET users listing. */
-router.get("/",async function  (req, res) {
+router.get("/", async function (req, res) {
   let newUser = new Users({ cart: [], bookings: [] });
+  await newUser.save();
   res.json(newUser);
 });
 
